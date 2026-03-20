@@ -47,3 +47,44 @@ invoke("talk", { message: talkInput })
   align-items: center; /* justify-content ではない */
 }
 ```
+
+## 5. Rust の `regex` crateは後方参照をサポートしない
+
+`regex` crateは線形時間保証のため `\1` などの後方参照、先読み、後読みに非対応。
+フル機能が必要な場合は `fancy-regex` crateを使う。
+
+```toml
+# Cargo.toml
+# regex = "1"        # 後方参照非対応
+fancy-regex = "0.14"  # 後方参照・先読み・後読み対応
+```
+
+`fancy-regex` は `find_iter` が `Result` を返すため、`.filter_map(|m| m.ok())` が必要。
+
+```rust
+use fancy_regex::Regex;
+
+let matches: Vec<String> = re
+    .find_iter(text)
+    .filter_map(|m| m.ok())  // regex crateでは不要、fancy-regexでは必要
+    .map(|m| m.as_str().to_string())
+    .collect();
+```
+
+## 6. Tauri の `Result` 返却コマンドではフロントエンド側でエラーハンドリングする
+
+Rust側が `Result<T, String>` を返すコマンドでエラーが発生すると、フロントエンドの `invoke` はrejectされる。
+`try/catch` しないとエラーが握りつぶされ、何も表示されない。
+
+```typescript
+// NG: エラーが発生しても何も起きない
+const results = await invoke<string[]>("regex_match", { pattern, text });
+
+// OK: エラーをキャッチしてユーザーに表示
+try {
+  const results = await invoke<string[]>("regex_match", { pattern, text });
+  setMatches(results);
+} catch (e) {
+  setMatches([`Error: ${e}`]);
+}
+```
